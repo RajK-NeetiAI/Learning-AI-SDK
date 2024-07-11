@@ -1,70 +1,51 @@
 'use client';
 
-import { useChat } from 'ai/react';
-import { useRef, useEffect, useState } from 'react';
-import { readStreamableValue } from 'ai/rsc';
-import { continueConversation } from '@/app/actions';
-import { type CoreMessage } from 'ai';
+import { useState } from 'react';
+import { ClientMessage } from './actions';
+import { useActions, useUIState } from 'ai/rsc';
+import { generateId } from 'ai';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-export default function Chat() {
-  const [messages, setMessages] = useState<CoreMessage[]>([]);
+export default function Home() {
   const [input, setInput] = useState<string>('');
-  const [data, setData] = useState<any>();
-  const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const scrollToBottom = () => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
-    }
-  };
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const [conversation, setConversation] = useUIState();
+  const { continueConversation } = useActions();
   return (
-    <div className="flex flex-col w-full max-w-xl py-12 mx-auto stretch h-screen scroll">
-      {data && <pre>{JSON.stringify(data, null, 2)}</pre>}
-      <div className="flex-grow overflow-auto scrollbar-hide">
-        {messages.map((m, i) => (
-          <div key={i} className="whitespace-pre-wrap text-justify">
-            {m.role === 'user' ? 'User: ' : 'AI: '}
-            {m.content as string}
+    <div>
+      <div>
+        {conversation.map((message: ClientMessage) => (
+          <div key={message.id}>
+            {message.role}: {message.display}
           </div>
         ))}
-        <div ref={messagesEndRef} />
       </div>
-      <form
-        className="mt-auto"
-        onSubmit={async e => {
-          e.preventDefault();
-          const newMessages: CoreMessage[] = [
-            ...messages,
-            { content: input, role: 'user' },
-          ];
-          setMessages(newMessages);
-          setInput('');
-          const result = await continueConversation(newMessages);
-          console.log(result);
-          setData(result.data);
-          for await (const content of readStreamableValue(result.message)) {
-            setMessages([
-              ...newMessages,
-              {
-                role: 'assistant',
-                content: content as string,
-              },
-            ]);
-          }
-        }}
-      >
+      <div>
         <input
-          className="w-full max-w-xl p-2 mb-8 border border-gray-300 rounded shadow-xl"
+          type="text"
           value={input}
-          placeholder="Say something..."
-          onChange={e => setInput(e.target.value)}
+          onChange={event => {
+            setInput(event.target.value);
+          }}
         />
-      </form>
+        <button
+          onClick={async () => {
+            setConversation((currentConversation: ClientMessage[]) => [
+              ...currentConversation,
+              { id: generateId(), role: 'user', display: input },
+            ]);
+            const message = await continueConversation(input);
+            setConversation((currentConversation: ClientMessage[]) => [
+              ...currentConversation,
+              message,
+            ]);
+            setInput('');
+          }}
+        >
+          Send Message
+        </button>
+      </div>
     </div>
   );
 };
